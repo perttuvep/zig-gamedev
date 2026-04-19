@@ -4,10 +4,6 @@ const assert = std.debug.assert;
 
 const options = @import("zglfw_options");
 
-test {
-    _ = std.testing.refAllDeclsRecursive(@This());
-}
-
 const zglfw = @This();
 
 fn cIntCast(value: anytype) c_int {

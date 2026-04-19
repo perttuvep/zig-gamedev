@@ -12,10 +12,6 @@ const Velocity = struct { x: f32, y: f32 };
 const Walking = struct {};
 const Direction = enum { north, south, east, west };
 
-test {
-    std.testing.refAllDeclsRecursive(@This());
-}
-
 test "extern struct ABI compatibility" {
     @setEvalBranchQuota(50_000);
     const flecs_c = @cImport({
@@ -477,7 +473,7 @@ test "zflecs.struct-dtor-hook" {
     defer _ = ecs.fini(world);
 
     const Chat = struct {
-        messages: std.ArrayList([]const u8) = .{},
+        messages: std.ArrayList([]const u8) = .empty,
         pub fn dtor(self: *@This()) void {
             self.messages.deinit(std.testing.allocator);
         }

@@ -593,11 +593,11 @@ pub fn Pool(
             handle: AddressableHandle,
         ) HandleError!void {
             if (isFreeCycle(handle.cycle))
-                return Error.HandleIsUnacquired;
+                return HandleError.HandleIsUnacquired;
             if (handle.index >= self._curr_cycle.len)
-                return Error.HandleIsOutOfBounds;
+                return HandleError.HandleIsOutOfBounds;
             if (handle.cycle != self._curr_cycle[handle.index])
-                return Error.HandleIsReleased;
+                return HandleError.HandleIsReleased;
         }
 
         fn acquireAddressableHandle(self: *Self) !AddressableHandle {
