@@ -38,6 +38,8 @@ pub fn build(b: *std.Build) void {
         .root_module = b.createModule(.{
             .target = target,
             .optimize = optimize,
+            .link_libc = true,
+            .link_libcpp = target.result.abi != .msvc,
         }),
     });
 
@@ -50,22 +52,18 @@ pub fn build(b: *std.Build) void {
 
     b.installArtifact(zmesh_lib);
 
-    zmesh_lib.linkLibC();
-    if (target.result.abi != .msvc)
-        zmesh_lib.linkLibCpp();
-
     const par_shapes_t = if (options.shape_use_32bit_indices)
         "-DPAR_SHAPES_T=uint32_t"
     else
         "-DPAR_SHAPES_T=uint16_t";
 
-    zmesh_lib.addIncludePath(b.path("libs/par_shapes"));
-    zmesh_lib.addCSourceFile(.{
+    zmesh_lib.root_module.addIncludePath(b.path("libs/par_shapes"));
+    zmesh_lib.root_module.addCSourceFile(.{
         .file = b.path("libs/par_shapes/par_shapes.c"),
         .flags = &.{ "-std=c99", "-fno-sanitize=undefined", par_shapes_t },
     });
 
-    zmesh_lib.addCSourceFiles(.{
+    zmesh_lib.root_module.addCSourceFiles(.{
         .files = &.{
             "libs/meshoptimizer/clusterizer.cpp",
             "libs/meshoptimizer/indexgenerator.cpp",
@@ -80,8 +78,8 @@ pub fn build(b: *std.Build) void {
         },
         .flags = &.{""},
     });
-    zmesh_lib.addIncludePath(b.path("libs/cgltf"));
-    zmesh_lib.addCSourceFile(.{
+    zmesh_lib.root_module.addIncludePath(b.path("libs/cgltf"));
+    zmesh_lib.root_module.addCSourceFile(.{
         .file = b.path("libs/cgltf/cgltf.c"),
         .flags = &.{"-std=c99"},
     });
@@ -94,8 +92,8 @@ pub fn build(b: *std.Build) void {
     });
     b.installArtifact(tests);
 
-    tests.linkLibrary(zmesh_lib);
-    tests.addIncludePath(b.path("libs/cgltf"));
+    tests.root_module.linkLibrary(zmesh_lib);
+    tests.root_module.addIncludePath(b.path("libs/cgltf"));
 
     test_step.dependOn(&b.addRunArtifact(tests).step);
 }

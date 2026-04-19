@@ -11,6 +11,7 @@ pub fn build(b: *std.Build) void {
     const miniaudio = b.addModule("miniaudio", .{
         .target = target,
         .optimize = optimize,
+        .link_libc = true,
     });
 
     const miniaudio_lib = b.addLibrary(.{
@@ -22,22 +23,21 @@ pub fn build(b: *std.Build) void {
     b.installArtifact(miniaudio_lib);
 
     miniaudio.addIncludePath(b.path("libs/miniaudio"));
-    miniaudio_lib.linkLibC();
 
     if (target.result.os.tag == .macos) {
         if (b.lazyDependency("system_sdk", .{})) |system_sdk| {
-            miniaudio_lib.addFrameworkPath(system_sdk.path("macos12/System/Library/Frameworks"));
-            miniaudio_lib.addSystemIncludePath(system_sdk.path("macos12/usr/include"));
-            miniaudio_lib.addLibraryPath(system_sdk.path("macos12/usr/lib"));
+            miniaudio_lib.root_module.addFrameworkPath(system_sdk.path("macos12/System/Library/Frameworks"));
+            miniaudio_lib.root_module.addSystemIncludePath(system_sdk.path("macos12/usr/include"));
+            miniaudio_lib.root_module.addLibraryPath(system_sdk.path("macos12/usr/lib"));
         }
-        miniaudio_lib.linkFramework("CoreAudio");
-        miniaudio_lib.linkFramework("CoreFoundation");
-        miniaudio_lib.linkFramework("AudioUnit");
-        miniaudio_lib.linkFramework("AudioToolbox");
+        miniaudio_lib.root_module.linkFramework("CoreAudio", .{});
+        miniaudio_lib.root_module.linkFramework("CoreFoundation", .{});
+        miniaudio_lib.root_module.linkFramework("AudioUnit", .{});
+        miniaudio_lib.root_module.linkFramework("AudioToolbox", .{});
     } else if (target.result.os.tag == .linux) {
-        miniaudio_lib.linkSystemLibrary("pthread");
-        miniaudio_lib.linkSystemLibrary("m");
-        miniaudio_lib.linkSystemLibrary("dl");
+        miniaudio_lib.root_module.linkSystemLibrary("pthread", .{});
+        miniaudio_lib.root_module.linkSystemLibrary("m", .{});
+        miniaudio_lib.root_module.linkSystemLibrary("dl", .{});
     }
 
     miniaudio.addCSourceFile(.{
@@ -75,7 +75,7 @@ pub fn build(b: *std.Build) void {
     });
     b.installArtifact(tests);
 
-    tests.linkLibrary(miniaudio_lib);
+    tests.root_module.linkLibrary(miniaudio_lib);
 
     test_step.dependOn(&b.addRunArtifact(tests).step);
 }

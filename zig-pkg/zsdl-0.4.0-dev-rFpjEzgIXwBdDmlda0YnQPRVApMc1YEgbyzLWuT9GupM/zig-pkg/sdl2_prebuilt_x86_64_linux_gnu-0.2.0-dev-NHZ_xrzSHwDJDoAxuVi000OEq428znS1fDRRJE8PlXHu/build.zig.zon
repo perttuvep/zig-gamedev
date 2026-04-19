@@ -1,0 +1,9 @@
+.{
+    .name = .sdl2_prebuilt_x86_64_linux_gnu,
+    .fingerprint = 0x1c642724c67f7634,
+    .version = "0.2.0-dev",
+    .paths = .{
+        "build.zig.zon",
+        "lib",
+    },
+}

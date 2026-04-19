@@ -225,6 +225,7 @@ fn buildExe(b: *std.Build, options: anytype, sample: anytype) *std.Build.Step.Co
 
     if (exe.rootModuleTarget().os.tag == .windows) {
         // TODO: Problems with LTO on Windows.
+        //exe.want_lto = false;
 
     }
 
