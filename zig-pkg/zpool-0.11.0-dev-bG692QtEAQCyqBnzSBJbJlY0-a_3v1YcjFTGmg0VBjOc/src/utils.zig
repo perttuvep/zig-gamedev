@@ -18,8 +18,7 @@ pub fn isStruct(comptime T: type) bool {
 
 /// UInt(bits) returns an unsigned integer type of the requested bit width.
 pub fn UInt(comptime bits: u8) type {
-    const unsigned = std.builtin.Signedness.unsigned;
-    return @Type(.{ .int = .{ .signedness = unsigned, .bits = bits } });
+    return @Int(.unsigned, bits);
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -49,52 +48,37 @@ pub fn AddressableUInt(comptime min_bits: u8) type {
 /// Given: `Struct = struct { foo: u32, bar: u64 }`
 /// Returns: `StructOfSlices = struct { foo: []u32, bar: []u64 }`
 pub fn StructOfSlices(comptime Struct: type) type {
-    const StructField = std.builtin.Type.StructField;
+    const fields = @typeInfo(Struct).@"struct".fields;
 
-    // same number of fields in the new struct
-    const struct_fields = @typeInfo(Struct).@"struct".fields;
+    return comptime blk: {
+        var names: [fields.len][]const u8 = undefined;
+        var types: [fields.len]type = undefined;
+        const FieldAttrs = std.builtin.Type.StructField.Attributes;
 
-    comptime var struct_of_slices_fields: []const StructField = &.{};
-    inline for (struct_fields) |struct_field| {
-        // u32 -> []u32
-        const element_type = struct_field.type;
+        var opts: [fields.len]FieldAttrs = undefined; // ✅
 
-        const slice_type_info = std.builtin.Type{
-            .pointer = .{
-                .child = element_type,
-                .alignment = @alignOf(element_type),
-                .size = .slice,
-                .is_const = false,
-                .is_volatile = false,
-                .address_space = .generic,
-                .is_allowzero = false,
-                .sentinel_ptr = null,
-            },
-        };
+        for (fields, 0..) |f, i| {
+            // build []T
+            const SliceT = []f.type;
 
-        const FieldType = @Type(slice_type_info);
+            names[i] = f.name;
+            types[i] = SliceT;
+            opts[i] = .{
+                .@"align" = @alignOf(SliceT),
+                .@"comptime" = false,
+                .default_value_ptr = null,
+            };
+        }
 
-        // Struct.foo: u32 -> StructOfSlices.foo : []u32
-        const slice_field = std.builtin.Type.StructField{
-            .name = struct_field.name,
-            .type = FieldType,
-            .default_value_ptr = null,
-            .is_comptime = false,
-            .alignment = @alignOf(FieldType),
-        };
-
-        // Struct.foo: u32 -> StructOfSlices.foo : []u32
-        struct_of_slices_fields = struct_of_slices_fields ++ [1]StructField{slice_field};
-    }
-
-    return @Type(.{ .@"struct" = .{
-        .layout = .auto,
-        .fields = struct_of_slices_fields,
-        .decls = &.{},
-        .is_tuple = false,
-    } });
+        break :blk @Struct(
+            .auto,
+            null,
+            &names,
+            &types,
+            &opts,
+        );
+    };
 }
-
 test "StructOfSlices" {
     const expectEqual = std.testing.expectEqual;
 

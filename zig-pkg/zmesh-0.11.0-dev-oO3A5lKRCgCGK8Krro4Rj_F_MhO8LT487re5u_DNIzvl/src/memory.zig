@@ -1,6 +1,8 @@
 const std = @import("std");
 const options = @import("zmesh_options");
 
+const io = std.Io.Threaded.global_single_threaded.io();
+
 pub fn init(alloc: std.mem.Allocator) void {
     std.debug.assert(mem_allocator == null and mem_allocations == null);
 
@@ -48,12 +50,12 @@ extern fn meshopt_setAllocator(
 
 var mem_allocator: ?std.mem.Allocator = null;
 var mem_allocations: ?std.AutoHashMap(usize, usize) = null;
-var mem_mutex: std.Thread.Mutex = .{};
+var mem_mutex: std.Io.Mutex = .init;
 const mem_alignment: std.mem.Alignment = .@"16";
 
 pub fn zmeshMalloc(size: usize) callconv(.c) ?*anyopaque {
-    mem_mutex.lock();
-    defer mem_mutex.unlock();
+    mem_mutex.lockUncancelable(io);
+    defer mem_mutex.unlock(io);
 
     const mem = mem_allocator.?.alignedAlloc(
         u8,
@@ -81,8 +83,8 @@ pub fn zmeshAllocUser(user: ?*anyopaque, size: usize) callconv(.c) ?*anyopaque {
 }
 
 fn zmeshRealloc(ptr: ?*anyopaque, size: usize) callconv(.c) ?*anyopaque {
-    mem_mutex.lock();
-    defer mem_mutex.unlock();
+    mem_mutex.lockUncancelable(io);
+    defer mem_mutex.unlock(io);
 
     const old_size = if (ptr != null) mem_allocations.?.get(@intFromPtr(ptr.?)).? else 0;
 
@@ -105,8 +107,8 @@ fn zmeshRealloc(ptr: ?*anyopaque, size: usize) callconv(.c) ?*anyopaque {
 
 fn zmeshFree(maybe_ptr: ?*anyopaque) callconv(.c) void {
     if (maybe_ptr) |ptr| {
-        mem_mutex.lock();
-        defer mem_mutex.unlock();
+        mem_mutex.lockUncancelable(io);
+        defer mem_mutex.unlock(io);
 
         const try_get_allocation = mem_allocations.?.fetchRemove(@intFromPtr(ptr));
         if (try_get_allocation) |alloc| {

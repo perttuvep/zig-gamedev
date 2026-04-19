@@ -25,12 +25,20 @@ const meta = struct {
                 i += 1;
             }
         }
-        return @Type(.{ .@"enum" = .{
-            .tag_type = tag_type,
-            .fields = &fields,
-            .decls = &.{},
-            .is_exhaustive = true,
-        } });
+        return @Enum(
+            //
+            // @Enum(
+            //     u32,
+            //     .exhaustive,
+            //     &.{ "foo", "bar" },
+            //     &.{ 0, 1 },
+            // )
+
+            tag_type,
+            .exhaustive,
+            &.{ fields[0].name, fields[1].name },
+            &.{ fields[0].value, fields[1].value },
+        );
     }
 };
 

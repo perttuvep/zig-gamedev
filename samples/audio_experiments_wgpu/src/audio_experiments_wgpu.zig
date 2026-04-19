@@ -1,7 +1,7 @@
 const std = @import("std");
 const math = std.math;
 const assert = std.debug.assert;
-const Mutex = std.Thread.Mutex;
+const Mutex = std.Io.Mutex;
 const zglfw = @import("zglfw");
 const zgpu = @import("zgpu");
 const wgpu = zgpu.wgpu;
@@ -9,6 +9,8 @@ const zgui = @import("zgui");
 const zm = @import("zmath");
 const zaudio = @import("zaudio");
 const wgsl = @import("audio_experiments_wgsl.zig");
+
+const io = std.Io.Threaded.global_single_threaded.io();
 
 const content_dir = @import("build_options").content_dir;
 const window_title = "zig-gamedev: audio experiments (wgpu)";
@@ -110,7 +112,7 @@ const AudioState = struct {
 
     device: *zaudio.Device,
     engine: *zaudio.Engine,
-    mutex: Mutex = .{},
+    mutex: Mutex = .init,
     current_set: u32 = num_sets - 1,
     samples: std.array_list.Managed(f32),
 
@@ -124,8 +126,8 @@ const AudioState = struct {
 
         audio.engine.asNodeGraphMut().readPcmFrames(output.?, num_frames, null) catch {};
 
-        audio.mutex.lock();
-        defer audio.mutex.unlock();
+        audio.mutex.lockUncancelable(io);
+        defer audio.mutex.unlock(io);
 
         audio.current_set = (audio.current_set + 1) % num_sets;
 
@@ -857,8 +859,8 @@ fn draw(demo: *DemoState) void {
             AudioState.num_sets * AudioState.usable_samples_per_set,
         ).?;
 
-        demo.audio.mutex.lock();
-        defer demo.audio.mutex.unlock();
+        demo.audio.mutex.lockUncancelable(io);
+        defer demo.audio.mutex.unlock(io);
 
         const rcp_num_sets = 1.0 / @as(f32, @floatFromInt(AudioState.num_sets - 1));
         var set: u32 = 0;
@@ -975,15 +977,19 @@ fn createDepthTexture(gctx: *zgpu.GraphicsContext) struct {
     return .{ .tex = tex, .texv = texv };
 }
 
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
     try zglfw.init();
     defer zglfw.terminate();
 
     // Change current working directory to where the executable is located.
     {
         var buffer: [1024]u8 = undefined;
-        const path = std.fs.selfExeDirPath(buffer[0..]) catch ".";
-        std.posix.chdir(path) catch {};
+        const idx = try std.process.executableDirPath(init.io, buffer[0..]);
+        const path = buffer[0..idx];
+        std.debug.print("path: {s}\n", .{path});
+        const dir = try std.Io.Dir.openDirAbsolute(init.io, path, .{});
+        defer dir.close(init.io);
+        try std.process.setCurrentDir(init.io, dir);
     }
 
     zglfw.windowHint(.client_api, .no_api);
@@ -992,10 +998,7 @@ pub fn main() !void {
     defer window.destroy();
     window.setSizeLimits(400, 400, -1, -1);
 
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-
-    const allocator = gpa.allocator();
+    const allocator = init.gpa;
 
     const demo = try create(allocator, window);
     defer destroy(allocator, demo);

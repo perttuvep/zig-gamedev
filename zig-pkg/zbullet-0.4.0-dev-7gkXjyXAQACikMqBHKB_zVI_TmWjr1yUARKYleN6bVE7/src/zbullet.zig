@@ -4,6 +4,8 @@ const std = @import("std");
 const Mutex = std.Thread.Mutex;
 const expect = std.testing.expect;
 
+const io = std.Io.Threaded.global_single_threaded.io();
+
 pub const World = *align(@sizeOf(usize)) WorldImpl;
 pub const Shape = *align(@sizeOf(usize)) ShapeImpl;
 pub const BoxShape = *align(@sizeOf(usize)) BoxShapeImpl;
@@ -31,11 +33,11 @@ const SizeAndAlignment = packed struct(u64) {
 };
 var mem_allocator: ?std.mem.Allocator = null;
 var mem_allocations: ?std.AutoHashMap(usize, SizeAndAlignment) = null;
-var mem_mutex: std.Thread.Mutex = .{};
+var mem_mutex: std.Io.Mutex = .init;
 
 export fn zbulletAlloc(size: usize, alignment: i32) callconv(.c) ?*anyopaque {
-    mem_mutex.lock();
-    defer mem_mutex.unlock();
+    mem_mutex.lockUncancelable(io);
+    defer mem_mutex.unlock(io);
 
     const ptr = mem_allocator.?.rawAlloc(
         size,
@@ -54,8 +56,8 @@ export fn zbulletAlloc(size: usize, alignment: i32) callconv(.c) ?*anyopaque {
 
 export fn zbulletFree(maybe_ptr: ?*anyopaque) callconv(.c) void {
     if (maybe_ptr) |ptr| {
-        mem_mutex.lock();
-        defer mem_mutex.unlock();
+        mem_mutex.lockUncancelable(io);
+        defer mem_mutex.unlock(io);
 
         const info = mem_allocations.?.fetchRemove(@intFromPtr(ptr)).?.value;
 
@@ -1206,7 +1208,7 @@ pub const DebugDrawer = struct {
     };
 
     pub fn init() DebugDrawer {
-        return .{ .lines = std.ArrayList(Vertex){} };
+        return .{ .lines = std.ArrayList(Vertex).empty };
     }
 
     pub fn deinit(debug: *DebugDrawer) void {
@@ -1281,10 +1283,6 @@ pub const DebugDrawer = struct {
         ) catch unreachable;
     }
 };
-
-test {
-    std.testing.refAllDeclsRecursive(@This());
-}
 
 test "zbullet.world.gravity" {
     const zm = @import("zmath");

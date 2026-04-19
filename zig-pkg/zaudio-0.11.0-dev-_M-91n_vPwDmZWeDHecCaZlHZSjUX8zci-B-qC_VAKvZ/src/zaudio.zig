@@ -1,5 +1,7 @@
 const std = @import("std");
 const assert = std.debug.assert;
+
+const io = std.Io.Threaded.global_single_threaded.io();
 //--------------------------------------------------------------------------------------------------
 //
 // Misc
@@ -3154,14 +3156,14 @@ pub const Fence = opaque {
 //--------------------------------------------------------------------------------------------------
 var mem_allocator: ?std.mem.Allocator = null;
 var mem_allocations: ?std.AutoHashMap(usize, usize) = null;
-var mem_mutex: std.Thread.Mutex = .{};
+var mem_mutex: std.Io.Mutex = .init;
 const mem_alignment = 16;
 
 extern var zaudioMallocPtr: ?*const fn (size: usize, _: ?*anyopaque) callconv(.c) ?*anyopaque;
 
 fn zaudioMalloc(size: usize, _: ?*anyopaque) callconv(.c) ?*anyopaque {
-    mem_mutex.lock();
-    defer mem_mutex.unlock();
+    mem_mutex.lockUncancelable(io);
+    defer mem_mutex.unlock(io);
 
     const zig_version = @import("builtin").zig_version;
 
@@ -3184,8 +3186,8 @@ fn zaudioMalloc(size: usize, _: ?*anyopaque) callconv(.c) ?*anyopaque {
 extern var zaudioReallocPtr: ?*const fn (ptr: ?*anyopaque, size: usize, _: ?*anyopaque) callconv(.c) ?*anyopaque;
 
 fn zaudioRealloc(ptr: ?*anyopaque, size: usize, _: ?*anyopaque) callconv(.c) ?*anyopaque {
-    mem_mutex.lock();
-    defer mem_mutex.unlock();
+    mem_mutex.lockUncancelable(io);
+    defer mem_mutex.unlock(io);
 
     const old_size = if (ptr != null) mem_allocations.?.get(@intFromPtr(ptr.?)).? else 0;
     const old_mem = if (old_size > 0)
@@ -3209,8 +3211,8 @@ extern var zaudioFreePtr: ?*const fn (maybe_ptr: ?*anyopaque, _: ?*anyopaque) ca
 
 fn zaudioFree(maybe_ptr: ?*anyopaque, _: ?*anyopaque) callconv(.c) void {
     if (maybe_ptr) |ptr| {
-        mem_mutex.lock();
-        defer mem_mutex.unlock();
+        mem_mutex.lockUncancelable(io);
+        defer mem_mutex.unlock(io);
 
         const size = mem_allocations.?.fetchRemove(@intFromPtr(ptr)).?.value;
         const mem = @as([*]align(mem_alignment) u8, @ptrCast(@alignCast(ptr)))[0..size];
@@ -3314,7 +3316,7 @@ test "zaudio.soundgroup.basic" {
 }
 
 test {
-    std.testing.refAllDeclsRecursive(@This());
+    std.testing.refAllDecls(@This());
 }
 
 test "zaudio.fence.basic" {
@@ -3449,7 +3451,7 @@ test "zaudio.audio_buffer" {
     sound.setLooping(true);
     try sound.start();
 
-    std.Thread.sleep(1e8);
+    try std.Io.Threaded.io(std.Io.Threaded.global_single_threaded).sleep(.fromNanoseconds(100), .awake);
 }
 
 test "zaudio.data_converter" {

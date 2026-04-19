@@ -100,21 +100,49 @@ pub fn Pool(
         pub fn ColumnType(comptime column: Column) type {
             return meta.fieldInfo(Columns, column).type;
         }
-
-        // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
         const private_fields = meta.fields(struct {
             @"Pool._free_queue": AddressableIndex,
             @"Pool._curr_cycle": AddressableCycle,
         });
+        // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+        const all_fields = private_fields ++ column_fields;
 
-        const Storage = MultiArrayList(@Type(.{ .@"struct" = .{
-            .layout = .auto,
-            .fields = private_fields ++ column_fields,
-            .decls = &.{},
-            .is_tuple = false,
-        } }));
+        // Extract field names: return array by value, then take address
+        const field_names = blk: {
+            var names: [all_fields.len][]const u8 = undefined;
+            for (all_fields, 0..) |field, i| {
+                names[i] = field.name;
+            }
+            break :blk names;
+        };
 
+        const field_types = blk: {
+            var types: [all_fields.len]type = undefined;
+            for (all_fields, 0..) |field, i| {
+                types[i] = field.type;
+            }
+            break :blk types;
+        };
+
+        const field_attrs = blk: {
+            var attrs: [all_fields.len]std.builtin.Type.StructField.Attributes = undefined;
+            for (all_fields, 0..) |field, i| {
+                attrs[i] = .{
+                    .@"align" = field.alignment,
+                    .@"comptime" = field.is_comptime,
+                    .default_value_ptr = field.default_value_ptr,
+                };
+            }
+            break :blk attrs;
+        };
+
+        const Storage = MultiArrayList(@Struct(
+            .auto,
+            null,
+            &field_names, // ✓ Coerces [N][]const u8 → []const []const u8
+            &field_types, // ✓ Pointer to comptime array of types
+            &field_attrs, // ✓ Pointer to comptime array of attributes
+        ));
         const FreeQueue = RingQueue(AddressableIndex);
 
         // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
