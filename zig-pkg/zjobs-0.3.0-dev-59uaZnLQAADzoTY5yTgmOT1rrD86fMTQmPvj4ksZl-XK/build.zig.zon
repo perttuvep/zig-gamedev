@@ -1,0 +1,13 @@
+.{
+    .name = .zjobs,
+    .fingerprint = 0xfc97bdaa669adbe7,
+    .version = "0.3.0-dev",
+    .minimum_zig_version = "0.14.0",
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "README.md",
+        "LICENSE",
+    },
+}
