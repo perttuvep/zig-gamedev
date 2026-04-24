@@ -7,15 +7,19 @@ const zopengl = @import("zopengl");
 const content_dir = @import("build_options").content_dir;
 const window_title = "zig-gamedev: minimal zgpu glfw opengl3";
 
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
     try glfw.init();
     defer glfw.terminate();
 
     // Change current working directory to where the executable is located.
     {
         var buffer: [1024]u8 = undefined;
-        const path = std.fs.selfExeDirPath(buffer[0..]) catch ".";
-        std.posix.chdir(path) catch {};
+        const idx = try std.process.executableDirPath(init.io, buffer[0..]);
+        const path = buffer[0..idx];
+        const dir = try std.Io.Dir.openDirAbsolute(init.io, path, .{});
+        defer dir.close(init.io);
+
+        try std.process.setCurrentDir(init.io, dir);
     }
 
     const gl_major = 4;
@@ -38,7 +42,7 @@ pub fn main() !void {
 
     const gl = zopengl.bindings;
 
-    var gpa_state = std.heap.GeneralPurposeAllocator(.{}){};
+    var gpa_state = std.heap.DebugAllocator(.{}){};
     defer _ = gpa_state.deinit();
     const gpa = gpa_state.allocator();
 

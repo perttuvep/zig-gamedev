@@ -9,6 +9,7 @@ const zphy = @import("zphysics");
 const zmesh = @import("zmesh");
 const wgsl = @import("physics_test_wgsl.zig");
 
+const io = std.Io.Threaded.global_single_threaded.io();
 const content_dir = @import("build_options").content_dir;
 const window_title = "zig-gamedev: physics test (wgpu)";
 
@@ -680,15 +681,18 @@ fn createDepthTexture(gctx: *zgpu.GraphicsContext) struct {
     return .{ .tex = tex, .texv = texv };
 }
 
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
     try zglfw.init();
     defer zglfw.terminate();
 
     // Change current working directory to where the executable is located.
     {
         var buffer: [1024]u8 = undefined;
-        const path = std.fs.selfExeDirPath(buffer[0..]) catch ".";
-        std.posix.chdir(path) catch {};
+        const idx = try std.process.executableDirPath(init.io, buffer[0..]);
+        const path = buffer[0..idx];
+        const dir = try std.Io.Dir.openDirAbsolute(init.io, path, .{});
+        defer dir.close(init.io);
+        try std.process.setCurrentDir(init.io, dir);
     }
 
     zglfw.windowHint(.client_api, .no_api);
@@ -697,10 +701,7 @@ pub fn main() !void {
     defer window.destroy();
     window.setSizeLimits(400, 400, -1, -1);
 
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-
-    const allocator = gpa.allocator();
+    const allocator = init.gpa;
 
     var demo = try create(allocator, window);
     defer destroy(allocator, demo);
@@ -725,16 +726,16 @@ pub fn main() !void {
 
     zgui.getStyle().scaleAllSizes(scale_factor);
 
-    var frame_timer = try std.time.Timer.start();
+    var frame_timer = std.Io.Timestamp.now(io, .awake);
 
     while (!window.shouldClose() and window.getKey(.escape) != .press) {
         {
             // spin loop for frame limiter
             const target_ns = @divTrunc(std.time.ns_per_s, frame_rate_target);
-            while (frame_timer.read() < target_ns) {
+            while (frame_timer.untilNow(io, .awake).toNanoseconds() < target_ns) {
                 std.atomic.spinLoopHint();
             }
-            frame_timer.reset();
+            frame_timer = std.Io.Timestamp.now(io, .awake);
         }
 
         zglfw.pollEvents();

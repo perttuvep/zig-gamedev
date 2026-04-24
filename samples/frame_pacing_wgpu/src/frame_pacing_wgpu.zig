@@ -144,20 +144,21 @@ const MonitorVideoMode = struct {
     video_mode: zglfw.VideoMode,
 };
 
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
     try zglfw.init();
     defer zglfw.terminate();
 
     // Change current working directory to where the executable is located.
     {
         var buffer: [1024]u8 = undefined;
-        const path = std.fs.selfExeDirPath(buffer[0..]) catch ".";
-        try std.posix.chdir(path);
+        const idx = try std.process.executableDirPath(init.io, buffer[0..]);
+        const path = buffer[0..idx];
+        const dir = try std.Io.Dir.openDirAbsolute(init.io, path, .{});
+        defer dir.close(init.io);
+        try std.process.setCurrentDir(init.io, dir);
     }
 
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+    const allocator = init.gpa;
 
     var surface = try Surface.init(allocator, null);
     defer surface.deinit(allocator);
@@ -215,7 +216,7 @@ pub fn main() !void {
 
     var reinit_surface: bool = false;
 
-    var frame_timer = try std.time.Timer.start();
+    var frame_timer = std.Io.Clock.awake.now(init.io);
     main: while (!surface.window.shouldClose() and surface.window.getKey(.escape) != .press) {
         if (reinit_surface) {
             switch (mode) {
@@ -243,10 +244,10 @@ pub fn main() !void {
                 target_ns = @as(u64, @intFromFloat(std.time.ns_per_ms * frame_time_target));
             }
             if (target_ns) |t| {
-                while (frame_timer.read() < t) {
+                while (frame_timer.untilNow(init.io, .awake).nanoseconds < t) {
                     std.atomic.spinLoopHint();
                 }
-                frame_timer.reset();
+                frame_timer = std.Io.Clock.awake.now(init.io);
             }
         }
 

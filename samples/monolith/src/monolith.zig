@@ -569,7 +569,7 @@ const DebugRenderer = struct {
         _: zphy.DebugRenderer.DrawMode,
     ) callconv(.c) void {
         const batch = geometry.LODs[0].batch;
-        const prim = @as(*const Primitive, @alignCast(@ptrCast(zphy.DebugRenderer.getPrimitiveFromBatch(batch))));
+        const prim = @as(*const Primitive, @ptrCast(@alignCast(zphy.DebugRenderer.getPrimitiveFromBatch(batch))));
         const lowp_model_matrix: [16]f32 = .{
             mat.column_0[0], mat.column_1[0], mat.column_2[0], lowP(mat.column_3[0]),
             mat.column_0[1], mat.column_1[1], mat.column_2[1], lowP(mat.column_3[1]),
@@ -1385,14 +1385,17 @@ fn createDepthTexture(gctx: *zgpu.GraphicsContext) struct {
     return .{ .tex = tex, .texv = texv };
 }
 
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
     try zglfw.init();
     defer zglfw.terminate();
 
-    { // Change current working directory to where the executable is located.
+    {
         var buffer: [1024]u8 = undefined;
-        const path = std.fs.selfExeDirPath(buffer[0..]) catch ".";
-        std.posix.chdir(path) catch {};
+        const idx = try std.process.executableDirPath(init.io, buffer[0..]);
+        const path = buffer[0..idx];
+        const dir = try std.Io.Dir.openDirAbsolute(init.io, path, .{});
+        defer dir.close(init.io);
+        try std.process.setCurrentDir(init.io, dir);
     }
 
     zglfw.windowHint(.client_api, .no_api);
@@ -1401,10 +1404,7 @@ pub fn main() !void {
     defer window.destroy();
     window.setSizeLimits(400, 400, -1, -1);
 
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-
-    const allocator = gpa.allocator();
+    const allocator = init.gpa;
 
     var demo = try create(allocator, window);
     defer destroy(allocator, demo);
