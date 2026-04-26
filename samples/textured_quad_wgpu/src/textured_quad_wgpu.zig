@@ -350,22 +350,17 @@ pub fn main(init: std.process.Init) !void {
     defer zglfw.terminate();
 
     const io = init.io;
+    const allocator = init.gpa;
     { // Change current working directory to where the executable is located.
-        var buffer: [1024]u8 = undefined;
-        const idx = try std.process.executableDirPath(io, buffer[0..]);
-        const path = buffer[0..idx];
-        const dir = try std.Io.Dir.openDirAbsolute(io, path, .{});
-        defer dir.close(io);
-        try std.process.setCurrentDir(io, dir);
+        const path = try std.process.executablePathAlloc(io, allocator);
+        defer allocator.free(path);
+        try std.process.setCurrentPath(io, path);
     } // Change current working directory to where the executable is located.
-
     zglfw.windowHint(.client_api, .no_api);
 
     const window = try zglfw.Window.create(1600, 1000, window_title, null, null);
     defer window.destroy();
     window.setSizeLimits(400, 400, -1, -1);
-
-    const allocator = init.gpa;
 
     const demo = try create(allocator, window);
     defer destroy(allocator, demo);

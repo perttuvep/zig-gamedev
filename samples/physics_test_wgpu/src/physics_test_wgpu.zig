@@ -9,7 +9,6 @@ const zphy = @import("zphysics");
 const zmesh = @import("zmesh");
 const wgsl = @import("physics_test_wgsl.zig");
 
-const io = std.Io.Threaded.global_single_threaded.io();
 const content_dir = @import("build_options").content_dir;
 const window_title = "zig-gamedev: physics test (wgpu)";
 
@@ -685,14 +684,13 @@ pub fn main(init: std.process.Init) !void {
     try zglfw.init();
     defer zglfw.terminate();
 
+    const allocator = init.gpa;
+    const io = init.io;
     // Change current working directory to where the executable is located.
     {
-        var buffer: [1024]u8 = undefined;
-        const idx = try std.process.executableDirPath(init.io, buffer[0..]);
-        const path = buffer[0..idx];
-        const dir = try std.Io.Dir.openDirAbsolute(init.io, path, .{});
-        defer dir.close(init.io);
-        try std.process.setCurrentDir(init.io, dir);
+        const path = try std.process.executablePathAlloc(io, allocator);
+        defer allocator.free(path);
+        try std.process.setCurrentPath(io, path);
     }
 
     zglfw.windowHint(.client_api, .no_api);
@@ -700,8 +698,6 @@ pub fn main(init: std.process.Init) !void {
     const window = try zglfw.Window.create(1600, 1000, window_title, null, null);
     defer window.destroy();
     window.setSizeLimits(400, 400, -1, -1);
-
-    const allocator = init.gpa;
 
     var demo = try create(allocator, window);
     defer destroy(allocator, demo);
